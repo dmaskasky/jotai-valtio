@@ -1,8 +1,7 @@
-import { Getter, Setter, WritableAtom, atom } from 'jotai'
+import { Getter, Setter, atom } from 'jotai'
 import assert from 'minimalistic-assert'
 import { proxy, snapshot, subscribe } from 'valtio'
 import {
-  ExtractFromSetStateAction,
   Options,
   PromiseOrValue,
   ProxyRef,
@@ -10,15 +9,17 @@ import {
   SetCb,
   SetSelf,
   Store,
+  Wrapped,
   WriteFn,
 } from './types'
 
-export function withProxyEffect<T, Result>(
-  atomToSync: WritableAtom<T, [T], Result>,
-  options: Options<T> = defaultOptions
+export function mutableAtom<Value>(
+  value: Value,
+  options: Options<Value> = defaultOptions
 ) {
-  type Value = ExtractFromSetStateAction<T>
-  const { sync, proxyFn } = { ...defaultOptions, ...options }
+  const { proxyFn } = { ...defaultOptions, ...options }
+
+  const valueAtom = atom({ value })
 
   const storeAtom = atom(
     () => ({ unsubscribe: null, isMounted: false } as Store),
@@ -30,8 +31,8 @@ export function withProxyEffect<T, Result>(
   }
 
   storeAtom.onMount = (writeFn) => {
-    // if sync is true, switch to synchronous imperative updates on mount
-    if (sync) writeFn((get, set) => createProxyState(get, (fn) => fn(set)))
+    // switch to synchronous imperative updates on mount
+    writeFn((get, set) => createProxyState(get, (fn) => fn(set)))
     return () => writeFn(onAtomUnmount)
   }
   /**
@@ -55,8 +56,8 @@ export function withProxyEffect<T, Result>(
       const proxyState = get(proxyRefAtom).current
       if (proxyState === null) return
       const { value } = snapshot(proxyState)
-      if (value !== get(atomToSync)) {
-        setCb((set) => set(atomToSync, value as Awaited<T>))
+      if (value !== get(valueAtom).value) {
+        setCb((set) => set(valueAtom, { value } as Wrapped<Awaited<Value>>))
       }
     }
   }
@@ -67,10 +68,10 @@ export function withProxyEffect<T, Result>(
   function createProxyState(get: Getter, setCb: SetCb) {
     const proxyRef = get(proxyRefAtom)
     const store = get(storeAtom)
-    const value = get(atomToSync)
-    proxyRef.current ??= proxyFn({ value }) as ProxyState<Value>
-    proxyRef.current.value = value as Value
-    const unsubscribe = subscribe(proxyRef.current, onChange(get, setCb), sync)
+    const { value } = get(valueAtom)
+    proxyRef.current ??= proxyFn({ value })
+    proxyRef.current.value = value
+    const unsubscribe = subscribe(proxyRef.current, onChange(get, setCb), true)
     store.unsubscribe?.()
     store.unsubscribe = () => {
       store.unsubscribe = null
@@ -121,13 +122,9 @@ export function withProxyEffect<T, Result>(
    */
   const proxyEffectBaseAtom = atom<ProxyState<Value>, [WriteFn], void>(
     (get, { setSelf }) => {
-      const value = get(atomToSync)
+      get(valueAtom) // subscribe to value updates
       const setCb = makeSetCb(setSelf)
       const proxyState = ensureProxyState(get, setCb)
-      // sync the atom with the proxy state
-      if (value !== snapshot(proxyState).value) {
-        proxyState.value = value as Value
-      }
       return wrapProxyState(proxyState, get, setCb)
     },
     (get, set, writeFn: WriteFn) => writeFn(get, set)
@@ -142,7 +139,6 @@ export function withProxyEffect<T, Result>(
 }
 
 const defaultOptions = {
-  sync: true,
   proxyFn: proxy,
 }
 

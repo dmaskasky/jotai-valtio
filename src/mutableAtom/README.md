@@ -71,44 +71,62 @@ atomWithProxy(proxyObject, { sync: true })
 
 <CodeSandbox id="ew98ll" />
 
-## withProxyEffect
+## mutableAtom
 
-`withProxyEffect` wraps a primitive atom’s value in a self-aware Valtio proxy. You can make changes to it in the same way you would to a normal js-object.
+`mutableAtom` wraps a value in a self-aware Valtio proxy. You can make changes to it in the same way you would to a normal js-object.
 
 ### API Signature
 
 ```jsx
-function withProxyEffect<Value>(atomToSync: PrimitiveAtom<Value>, options?: Options<Value>): Atom<{ value: Value}>
+function mutableAtom<Value>(value: Value, options?: Options<Value>): Atom<{ value: Value}>
 ```
 
 ### Parameters
 
-- **atomToSync** (required): the primitive atom to sync.
-- **options** (optional): allows customization with `sync` for synchronous updates and `proxyFn` for custom proxy functions.
+- **value** (required): the value to proxy.
+- **options** (optional): allows customization with `proxyFn` for custom proxy functions.
 
 ### Example
 
 Count value is stored under the `value` property.
 
 ```jsx
-const countAtom = atom(0)
-const proxyCountAtom = withProxyEffect < Value > countAtom
+const countProxyAtom = mutableAtom<Value>(0)
 
 function IncrementButton() {
-  const proxyCount = useAtomValue(proxyCountAtom)
-  return <button onClick={() => proxyCount.value++}>+</button>
+  const countProxy = useAtomValue(countProxyAtom)
+  return <button onClick={() => countProxy.value++}>+</button>
 }
 ```
 
+<CodeSandbox id="f84sk5" />
+
 ### Options
 
-Options include `sync` for determining synchronous updates and `proxyFn` which can be `proxy`, `proxySet`, `proxyMap`, or a custom function.
+Options include `proxyFn` which can be `proxy` or a custom function.
 
 ```jsx
 type ProxyFn<Value> = (obj: { value: Value }) => ({ value: Value })
 
 type Options<Value> = {
-  sync: boolean
   proxyFn: ProxyFn<Value>
 }
+```
+
+### Caution on Mutating Proxies
+Be careful not to mutate the proxy directly in the atom's read function or during render in React components. Doing so might trigger an infinite render loop.
+
+```ts
+const countProxyAtom = mutableAtom<Value>(0)
+
+atom(
+  (get) => {
+    const countProxy = get(countProxyAtom)
+    countProxy.value++ // This will cause an infinite loop
+  },
+  (get, set) => {
+    const countProxy = get(countProxyAtom)
+    countProxy.value++ // This is fine
+  }
+)
 ```

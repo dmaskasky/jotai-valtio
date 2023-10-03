@@ -1,9 +1,8 @@
 import { Getter, Setter } from 'jotai'
-import type { SetStateAction } from 'jotai/vanilla'
 
 type Ref<T> = { current: T }
 
-type Wrapped<T> = { value: T }
+export type Wrapped<T> = { value: T }
 
 type ProxyFn<T> = (obj: Wrapped<T>) => Wrapped<T>
 
@@ -15,15 +14,11 @@ type Write<Args extends unknown[], Result> = (
   ...args: Args
 ) => Result
 
-export type WriteFn<Result = PromiseOrValue<void>> = Write<[], Result>
-
-export type ExtractFromSetStateAction<T> = T extends SetStateAction<infer U>
-  ? U
-  : never
-
-export type SetAtom<Args extends unknown[], Result> = <A extends Args>(
+type SetAtom<Args extends unknown[], Result> = <A extends Args>(
   ...args: A
 ) => Result
+
+export type WriteFn<Result = PromiseOrValue<void>> = Write<[], Result>
 
 export type PromiseOrValue<T> = Promise<T> | T
 
@@ -35,7 +30,6 @@ export type Store = {
 }
 
 export type Options<T> = {
-  sync?: boolean
   proxyFn?: ProxyFn<T>
 }
 

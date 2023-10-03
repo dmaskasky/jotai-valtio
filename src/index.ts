@@ -1,3 +1,3 @@
 export { atomWithProxy } from './atomWithProxy'
 
-export { withProxyEffect } from './withProxyEffect'
+export { mutableAtom } from './mutableAtom'
