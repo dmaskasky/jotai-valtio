@@ -75,19 +75,6 @@ atomWithProxy(proxyObject, { sync: true })
 
 `mutableAtom` wraps a value in a self-aware Valtio proxy. You can make changes to it in the same way you would to a normal js-object.
 
-### API Signature
-
-```jsx
-function mutableAtom<Value>(value: Value, options?: Options<Value>): Atom<{ value: Value}>
-```
-
-### Parameters
-
-- **value** (required): the value to proxy.
-- **options** (optional): allows customization with `proxyFn` for custom proxy functions.
-
-### Example
-
 Count value is stored under the `value` property.
 
 ```jsx
@@ -99,22 +86,23 @@ function IncrementButton() {
 }
 ```
 
-<CodeSandbox id="f84sk5" />
+### Parameters
 
-### Options
-
-Options include `proxyFn` which can be `proxy` or a custom function.
-
-```jsx
-type ProxyFn<Value> = (obj: { value: Value }) => ({ value: Value })
-
-type Options<Value> = {
-  proxyFn: ProxyFn<Value>
-}
+```js
+mutableAtom(value, options?)
 ```
 
+**value** (required): the value to proxy.
+
+**options.proxyFn** (optional): allows customization with `proxyFn` for custom proxy functions. Can be `proxy` (default) or a custom function.
+
+### Examples
+
+<CodeSandbox id="f84sk5" />
+
 ### Caution on Mutating Proxies
-Be careful not to mutate the proxy directly in the atom's read function or during render in React components. Doing so might trigger an infinite render loop.
+
+Be careful to not mutate the proxy directly in the atom's read function or during render. Doing so could cause an infinite render loop.
 
 ```ts
 const countProxyAtom = mutableAtom(0)
