@@ -3,8 +3,8 @@ import { act, render, renderHook, waitFor } from '@testing-library/react'
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
 import type { SetStateAction } from 'jotai/vanilla'
 import assert from 'minimalistic-assert'
-import { ProxyState, SetAtom, WriteFn } from '../src/withProxyEffect/types'
 import { withProxyEffect } from '../src/withProxyEffect'
+import { ProxyState, SetAtom, WriteFn } from '../src/withProxyEffect/types'
 
 it('should be defined on initial render', async () => {
   expect.assertions(1)
