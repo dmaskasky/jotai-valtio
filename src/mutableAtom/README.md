@@ -91,7 +91,7 @@ function mutableAtom<Value>(value: Value, options?: Options<Value>): Atom<{ valu
 Count value is stored under the `value` property.
 
 ```jsx
-const countProxyAtom = mutableAtom<Value>(0)
+const countProxyAtom = mutableAtom(0)
 
 function IncrementButton() {
   const countProxy = useAtomValue(countProxyAtom)
@@ -117,7 +117,7 @@ type Options<Value> = {
 Be careful not to mutate the proxy directly in the atom's read function or during render in React components. Doing so might trigger an infinite render loop.
 
 ```ts
-const countProxyAtom = mutableAtom<Value>(0)
+const countProxyAtom = mutableAtom(0)
 
 atom(
   (get) => {
