@@ -53,7 +53,7 @@ it('should rerender only when the proxy value changes', async () => {
   expect(runCount).toBe(3)
 })
 
-it('should subscribe on mount, unsubscribe on unmount, and resubscribe on remount', async () => {
+it('should handle updates correctly regardless of mount and unmount events', async () => {
   expect.assertions(7)
   const mutableCountAtom = mutableAtom(0)
   let targetAtom = mutableCountAtom
@@ -84,7 +84,6 @@ it('should subscribe on mount, unsubscribe on unmount, and resubscribe on remoun
   unmount()
 
   await act(async () => result.current.countProxy.value++)
-  // TODO: should countProxy throw when mutableAtom is unmounted?
   expect(result.current.countProxy.value).toBe(2)
 
   remount()
