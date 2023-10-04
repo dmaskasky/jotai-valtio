@@ -1,31 +1,13 @@
-import type { Getter, Setter } from 'jotai'
-
 export type Wrapped<T> = { value: T }
 
 type ProxyFn<T> = (obj: Wrapped<T>) => Wrapped<T>
 
-type CleanupFn = () => PromiseOrValue<void>
-
-type Write<Args extends unknown[], Result> = (
-  get: Getter,
-  set: Setter,
-  ...args: Args
-) => Result
-
-type SetAtom<Args extends unknown[], Result> = <A extends Args>(
-  ...args: A
-) => Result
-
-export type WriteFn<Result = PromiseOrValue<void>> = Write<[], Result>
-
-export type PromiseOrValue<T> = Promise<T> | T
-
-export type SetSelf<Args extends unknown[]> = SetAtom<Args, void>
+type PromiseOrValue<T> = Promise<T> | T
 
 export type Store<Value> = {
-  unsubscribe: CleanupFn | null
-  hasMounted: boolean
   proxyState: ProxyState<Value> | null
+  getValue: () => Value
+  setValue: (value: Value) => PromiseOrValue<void>
 }
 
 export type Options<T> = {
@@ -34,4 +16,10 @@ export type Options<T> = {
 
 export type ProxyState<Value> = { value: Value }
 
-export type SetCb = (fn: (set: Setter) => void) => void
+export type Action<Type extends string> = {
+  type: Type
+}
+
+export type ActionWithPayload<Type extends string, Payload> = Action<Type> & {
+  payload: Payload
+}

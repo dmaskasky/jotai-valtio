@@ -1,15 +1,13 @@
 import { atom } from 'jotai'
-import type { Getter, PrimitiveAtom, Setter } from 'jotai'
+import type { PrimitiveAtom } from 'jotai'
 import { proxy, snapshot, subscribe } from 'valtio'
 import type {
+  Action,
+  ActionWithPayload,
   Options,
-  PromiseOrValue,
   ProxyState,
-  SetCb,
-  SetSelf,
   Store,
   Wrapped,
-  WriteFn,
 } from './types'
 
 export function mutableAtom<Value>(
@@ -30,20 +28,32 @@ export function makeMutableAtom<Value>(
 ) {
   const { proxyFn } = { ...defaultOptions, ...options }
 
-  const storeAtom = atom(
-    () =>
-      ({
-        hasMounted: false,
-        proxyState: null,
-        unsubscribe: null,
-      } as Store<Value>),
-    (get, set) => {
-      // switch to synchronous imperative updates on mount
-      createProxyState(get, (fn) => fn(set))
+  const storeAtom = atom<
+    Store<Value>,
+    [ActionWithPayload<'setValueAsync', Value> | Action<'mount'>],
+    void
+  >(
+    (get, { setSelf }) => ({
+      proxyState: null,
+      getValue: () => get(valueAtom).value,
+      setValue: async (value: Value) => {
+        await defer()
+        setSelf({ type: 'setValueAsync', payload: value })
+      },
+    }),
+    (get, set, action) => {
+      if (action.type === 'setValueAsync') {
+        set(valueAtom, { value: action.payload })
+      } else if (action.type === 'mount') {
+        const store = get(storeAtom)
+        store.setValue = (value: Value) => {
+          set(valueAtom, { value })
+        }
+      }
     }
   )
 
-  storeAtom.onMount = (setInit) => setInit()
+  storeAtom.onMount = (setAtom) => setAtom({ type: 'mount' })
 
   if (process.env.NODE_ENV !== 'production') {
     storeAtom.debugPrivate = true
@@ -52,13 +62,13 @@ export function makeMutableAtom<Value>(
   /**
    * sync the proxy state with the atom
    */
-  function onChange(get: Getter, setCb: SetCb) {
+  function onChange(getStore: () => Store<Value>) {
     return () => {
-      const { proxyState } = get(storeAtom)
+      const { proxyState, getValue, setValue } = getStore()
       if (proxyState === null) return
       const { value } = snapshot(proxyState)
-      if (value !== get(valueAtom).value) {
-        setCb((set) => set(valueAtom, { value } as Wrapped<Awaited<Value>>))
+      if (value !== getValue()) {
+        setValue(value as Awaited<Value>)
       }
     }
   }
@@ -66,24 +76,22 @@ export function makeMutableAtom<Value>(
   /**
    * create the proxy state and subscribe to it
    */
-  function createProxyState(get: Getter, setCb: SetCb) {
-    const store = get(storeAtom)
-    const { value } = get(valueAtom)
+  function createProxyState(getStore: () => Store<Value>) {
+    const store = getStore()
+    const value = store.getValue()
     store.proxyState ??= proxyFn({ value })
     store.proxyState.value = value
-    store.unsubscribe?.()
-    store.unsubscribe = subscribe(store.proxyState, onChange(get, setCb), true)
-    store.hasMounted = true
+    subscribe(store.proxyState, onChange(getStore), true)
     return store.proxyState
   }
 
   /**
    * return the proxy if it exists, otherwise create and subscribe to it
    */
-  function ensureProxyState(get: Getter, setCb: SetCb) {
-    const { hasMounted, proxyState } = get(storeAtom)
-    if (proxyState === null || !hasMounted) {
-      return createProxyState(get, setCb)
+  function ensureProxyState(getStore: () => Store<Value>) {
+    const { proxyState } = getStore()
+    if (proxyState === null) {
+      return createProxyState(getStore)
     }
     return proxyState
   }
@@ -109,21 +117,12 @@ export function makeMutableAtom<Value>(
   /**
    * create an atom that returns the proxy state
    */
-  const proxyEffectBaseAtom = atom<ProxyState<Value>, [WriteFn], void>(
-    (get, { setSelf }) => {
-      get(valueAtom) // subscribe to value updates
-      const setCb = makeSetCb(setSelf)
-      const proxyState = ensureProxyState(get, setCb)
-      return wrapProxyState(proxyState)
-    },
-    (get, set, writeFn: WriteFn) => writeFn(get, set)
-  )
-
-  if (process.env.NODE_ENV !== 'production') {
-    proxyEffectBaseAtom.debugPrivate = true
-  }
-
-  const proxyEffectAtom = atom((get) => get(proxyEffectBaseAtom))
+  const proxyEffectAtom = atom<ProxyState<Value>>((get) => {
+    get(valueAtom) // subscribe to value updates
+    const getStore = () => get(storeAtom)
+    const proxyState = ensureProxyState(getStore)
+    return wrapProxyState(proxyState)
+  })
   return proxyEffectAtom
 }
 
@@ -132,16 +131,8 @@ const defaultOptions = {
 }
 
 /**
- * create a set callback that defers execution until next microtask
- */
-const makeSetCb =
-  (setSelf: SetSelf<[WriteFn]>): SetCb =>
-  (fn: (set: Setter) => void) =>
-    defer(() => setSelf((_, set) => fn(set)))
-
-/**
  * delays execution until next microtask
  */
-function defer(fn?: () => PromiseOrValue<void>) {
-  return Promise.resolve().then(fn)
+function defer() {
+  return Promise.resolve().then()
 }
