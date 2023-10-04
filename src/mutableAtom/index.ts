@@ -1,4 +1,5 @@
-import { Getter, Setter, atom } from 'jotai'
+import { atom } from 'jotai'
+import type { Getter, Setter } from 'jotai'
 import assert from 'minimalistic-assert'
 import { proxy, snapshot, subscribe } from 'valtio'
 import {
@@ -23,17 +24,23 @@ export function mutableAtom<Value>(
 
   const storeAtom = atom(
     () => ({ unsubscribe: null, isMounted: false } as Store),
-    (get, set, writeFn: WriteFn) => writeFn(get, set)
+    (get, set, isOnMount: boolean) => {
+      if (isOnMount) {
+        createProxyState(get, (fn) => fn(set))
+      } else {
+        onAtomUnmount(get)
+      }
+    }
   )
 
   if (process.env.NODE_ENV !== 'production') {
     storeAtom.debugPrivate = true
   }
 
-  storeAtom.onMount = (writeFn) => {
+  storeAtom.onMount = (setOnMount) => {
     // switch to synchronous imperative updates on mount
-    writeFn((get, set) => createProxyState(get, (fn) => fn(set)))
-    return () => writeFn(onAtomUnmount)
+    setOnMount(true)
+    return () => setOnMount(false)
   }
   /**
    * unsubscribe on atom unmount
@@ -86,7 +93,9 @@ export function mutableAtom<Value>(
   function ensureProxyState(get: Getter, setCb: SetCb) {
     const proxyRef = get(proxyRefAtom)
     const store = get(storeAtom)
-    if (!store.isMounted) createProxyState(get, setCb)
+    if (proxyRef.current === null || !store.isMounted) {
+      createProxyState(get, setCb)
+    }
     assert(proxyRef.current !== null)
     return proxyRef.current
   }

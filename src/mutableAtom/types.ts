@@ -1,4 +1,4 @@
-import { Getter, Setter } from 'jotai'
+import type { Getter, Setter } from 'jotai'
 
 type Ref<T> = { current: T }
 
