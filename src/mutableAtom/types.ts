@@ -1,7 +1,5 @@
 import type { Getter, Setter } from 'jotai'
 
-type Ref<T> = { current: T }
-
 export type Wrapped<T> = { value: T }
 
 type ProxyFn<T> = (obj: Wrapped<T>) => Wrapped<T>
@@ -24,9 +22,10 @@ export type PromiseOrValue<T> = Promise<T> | T
 
 export type SetSelf<Args extends unknown[]> = SetAtom<Args, void>
 
-export type Store = {
+export type Store<Value> = {
   unsubscribe: CleanupFn | null
   isMounted: boolean
+  proxyState: ProxyState<Value> | null
 }
 
 export type Options<T> = {
@@ -34,7 +33,5 @@ export type Options<T> = {
 }
 
 export type ProxyState<Value> = { value: Value }
-
-export type ProxyRef<Value> = Ref<ProxyState<Value> | null>
 
 export type SetCb = (fn: (set: Setter) => void) => void

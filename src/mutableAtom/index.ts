@@ -1,11 +1,9 @@
 import { atom } from 'jotai'
 import type { Getter, Setter } from 'jotai'
-import assert from 'minimalistic-assert'
 import { proxy, snapshot, subscribe } from 'valtio'
 import {
   Options,
   PromiseOrValue,
-  ProxyRef,
   ProxyState,
   SetCb,
   SetSelf,
@@ -22,8 +20,17 @@ export function mutableAtom<Value>(
 
   const valueAtom = atom({ value })
 
+  if (process.env.NODE_ENV !== 'production') {
+    valueAtom.debugPrivate = true
+  }
+
   const storeAtom = atom(
-    () => ({ unsubscribe: null, isMounted: false } as Store),
+    () =>
+      ({
+        isMounted: false,
+        proxyState: null,
+        unsubscribe: null,
+      } as Store<Value>),
     (get, set, isOnMount: boolean) => {
       if (isOnMount) {
         createProxyState(get, (fn) => fn(set))
@@ -33,15 +40,16 @@ export function mutableAtom<Value>(
     }
   )
 
-  if (process.env.NODE_ENV !== 'production') {
-    storeAtom.debugPrivate = true
-  }
-
   storeAtom.onMount = (setOnMount) => {
     // switch to synchronous imperative updates on mount
     setOnMount(true)
     return () => setOnMount(false)
   }
+
+  if (process.env.NODE_ENV !== 'production') {
+    storeAtom.debugPrivate = true
+  }
+
   /**
    * unsubscribe on atom unmount
    */
@@ -50,17 +58,12 @@ export function mutableAtom<Value>(
     get(storeAtom).isMounted = false
   }
 
-  const proxyRefAtom = atom(() => ({ current: null } as ProxyRef<Value>))
-  if (process.env.NODE_ENV !== 'production') {
-    proxyRefAtom.debugPrivate = true
-  }
-
   /**
    * sync the proxy state with the atom
    */
   function onChange(get: Getter, setCb: SetCb) {
     return () => {
-      const proxyState = get(proxyRefAtom).current
+      const { proxyState } = get(storeAtom)
       if (proxyState === null) return
       const { value } = snapshot(proxyState)
       if (value !== get(valueAtom).value) {
@@ -73,31 +76,29 @@ export function mutableAtom<Value>(
    * create the proxy state and subscribe to it
    */
   function createProxyState(get: Getter, setCb: SetCb) {
-    const proxyRef = get(proxyRefAtom)
     const store = get(storeAtom)
     const { value } = get(valueAtom)
-    proxyRef.current ??= proxyFn({ value })
-    proxyRef.current.value = value
-    const unsubscribe = subscribe(proxyRef.current, onChange(get, setCb), true)
+    store.proxyState ??= proxyFn({ value })
+    store.proxyState.value = value
+    const unsubscribe = subscribe(store.proxyState, onChange(get, setCb), true)
     store.unsubscribe?.()
     store.unsubscribe = () => {
       store.unsubscribe = null
       unsubscribe()
     }
     store.isMounted = true
+    return store.proxyState
   }
 
   /**
    * return the proxy if it exists, otherwise create and subscribe to it
    */
   function ensureProxyState(get: Getter, setCb: SetCb) {
-    const proxyRef = get(proxyRefAtom)
-    const store = get(storeAtom)
-    if (proxyRef.current === null || !store.isMounted) {
-      createProxyState(get, setCb)
+    const { isMounted, proxyState } = get(storeAtom)
+    if (proxyState === null || !isMounted) {
+      return createProxyState(get, setCb)
     }
-    assert(proxyRef.current !== null)
-    return proxyRef.current
+    return proxyState
   }
 
   /**
@@ -151,6 +152,9 @@ const defaultOptions = {
   proxyFn: proxy,
 }
 
+/**
+ * create a set callback that defers execution until next microtask
+ */
 const makeSetCb =
   (setSelf: SetSelf<[WriteFn]>): SetCb =>
   (fn: (set: Setter) => void) =>

@@ -3,7 +3,7 @@ import { act, render, renderHook, waitFor } from '@testing-library/react'
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
 import assert from 'minimalistic-assert'
 import { mutableAtom } from '../src/mutableAtom'
-import { ProxyState } from '../src/mutableAtom/types'
+import type { ProxyState } from '../src/mutableAtom/types'
 
 it('should be defined on initial render', async () => {
   expect.assertions(1)
@@ -245,7 +245,7 @@ it('should set falsy value', async () => {
   expect(result.current.countProxy.value).toBe(0)
 })
 
-it.only('should accept a function as a value', async () => {
+it('should accept a function as a value', async () => {
   expect.assertions(4)
   const mutableFunctionAtom = mutableAtom<() => string>(() => 'foo')
   let runCount = 0
