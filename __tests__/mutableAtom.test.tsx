@@ -1,8 +1,15 @@
 import React from 'react'
 import { act, render, renderHook, waitFor } from '@testing-library/react'
-import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
+import {
+  Provider,
+  atom,
+  createStore,
+  useAtom,
+  useAtomValue,
+  useSetAtom,
+} from 'jotai'
 import assert from 'minimalistic-assert'
-import { mutableAtom } from '../src/mutableAtom'
+import { makeMutableAtom, mutableAtom } from '../src/mutableAtom'
 import type { ProxyState } from '../src/mutableAtom/types'
 
 it('should be defined on initial render', async () => {
@@ -274,7 +281,7 @@ it('should reject writing to properties other than `value`', async () => {
   }
   const { result } = renderHook(useTest)
   expect(async () => {
-    await act(() => {
+    await act(async () => {
       result.current.countProxy.value = 1
     })
   }).not.toThrow()
@@ -282,6 +289,47 @@ it('should reject writing to properties other than `value`', async () => {
     // @ts-expect-error attempting to write to a property other than `value`
     result.current.countProxy.NOT_VALUE = 'TEST'
   }).toThrow() // 'set' on proxy: trap returned falsish for property 'NOT_VALUE'
+})
+
+it('should allow updating even when component is unmounted', async () => {
+  expect.assertions(2)
+  const store = createStore()
+  const countAtom = atom({ value: 0 })
+  let isMounted = false
+  countAtom.onMount = () => {
+    isMounted = true
+  }
+  const mutableCountAtom = makeMutableAtom(countAtom)
+
+  function useTest() {
+    useAtomValue(mutableCountAtom)
+  }
+  function wrapper({ children }: { children: React.ReactNode }) {
+    return <Provider store={store}>{children}</Provider>
+  }
+
+  const { unmount } = renderHook(useTest, { wrapper })
+  await waitFor(() => assert(isMounted))
+  unmount()
+  expect(store.get(countAtom).value).toBe(0)
+  await act(async () => {
+    const countProxy = store.get(mutableCountAtom)
+    countProxy.value++
+  })
+  expect(store.get(countAtom).value).toBe(1)
+})
+
+it('should allow updating even when component has not mounted', async () => {
+  expect.assertions(2)
+  const store = createStore()
+  const countAtom = atom({ value: 0 })
+  const mutableCountAtom = makeMutableAtom(countAtom)
+  expect(store.get(countAtom).value).toBe(0)
+  await act(async () => {
+    const countProxy = store.get(mutableCountAtom)
+    countProxy.value++
+  })
+  expect(store.get(countAtom).value).toBe(1)
 })
 
 it('should correctly handle updates via writable atom', async () => {

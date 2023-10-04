@@ -24,7 +24,7 @@ export type SetSelf<Args extends unknown[]> = SetAtom<Args, void>
 
 export type Store<Value> = {
   unsubscribe: CleanupFn | null
-  isMounted: boolean
+  hasMounted: boolean
   proxyState: ProxyState<Value> | null
 }
 

@@ -1,7 +1,7 @@
 import { atom } from 'jotai'
-import type { Getter, Setter } from 'jotai'
+import type { Getter, PrimitiveAtom, Setter } from 'jotai'
 import { proxy, snapshot, subscribe } from 'valtio'
-import {
+import type {
   Options,
   PromiseOrValue,
   ProxyState,
@@ -16,46 +16,37 @@ export function mutableAtom<Value>(
   value: Value,
   options: Options<Value> = defaultOptions
 ) {
-  const { proxyFn } = { ...defaultOptions, ...options }
-
   const valueAtom = atom({ value })
 
   if (process.env.NODE_ENV !== 'production') {
     valueAtom.debugPrivate = true
   }
+  return makeMutableAtom(valueAtom, options)
+}
+
+export function makeMutableAtom<Value>(
+  valueAtom: PrimitiveAtom<Wrapped<Value>>,
+  options: Options<Value> = defaultOptions
+) {
+  const { proxyFn } = { ...defaultOptions, ...options }
 
   const storeAtom = atom(
     () =>
       ({
-        isMounted: false,
+        hasMounted: false,
         proxyState: null,
         unsubscribe: null,
       } as Store<Value>),
-    (get, set, isOnMount: boolean) => {
-      if (isOnMount) {
-        createProxyState(get, (fn) => fn(set))
-      } else {
-        onAtomUnmount(get)
-      }
+    (get, set) => {
+      // switch to synchronous imperative updates on mount
+      createProxyState(get, (fn) => fn(set))
     }
   )
 
-  storeAtom.onMount = (setOnMount) => {
-    // switch to synchronous imperative updates on mount
-    setOnMount(true)
-    return () => setOnMount(false)
-  }
+  storeAtom.onMount = (setInit) => setInit()
 
   if (process.env.NODE_ENV !== 'production') {
     storeAtom.debugPrivate = true
-  }
-
-  /**
-   * unsubscribe on atom unmount
-   */
-  function onAtomUnmount(get: Getter) {
-    get(storeAtom).unsubscribe?.()
-    get(storeAtom).isMounted = false
   }
 
   /**
@@ -80,13 +71,9 @@ export function mutableAtom<Value>(
     const { value } = get(valueAtom)
     store.proxyState ??= proxyFn({ value })
     store.proxyState.value = value
-    const unsubscribe = subscribe(store.proxyState, onChange(get, setCb), true)
     store.unsubscribe?.()
-    store.unsubscribe = () => {
-      store.unsubscribe = null
-      unsubscribe()
-    }
-    store.isMounted = true
+    store.unsubscribe = subscribe(store.proxyState, onChange(get, setCb), true)
+    store.hasMounted = true
     return store.proxyState
   }
 
@@ -94,8 +81,8 @@ export function mutableAtom<Value>(
    * return the proxy if it exists, otherwise create and subscribe to it
    */
   function ensureProxyState(get: Getter, setCb: SetCb) {
-    const { isMounted, proxyState } = get(storeAtom)
-    if (proxyState === null || !isMounted) {
+    const { hasMounted, proxyState } = get(storeAtom)
+    if (proxyState === null || !hasMounted) {
       return createProxyState(get, setCb)
     }
     return proxyState
@@ -104,21 +91,13 @@ export function mutableAtom<Value>(
   /**
    * wrap the proxy state in a proxy to ensure rerender on value change
    */
-  function wrapProxyState(
-    proxyState: ProxyState<Value>,
-    get: Getter,
-    setCb: SetCb
-  ) {
+  function wrapProxyState(proxyState: ProxyState<Value>) {
     return new Proxy(proxyState, {
       get: (target, property) => {
-        if (property === 'value') {
-          ensureProxyState(get, setCb)
-        }
         return target[property as keyof ProxyState<Value>]
       },
       set(target, property, value) {
         if (property === 'value') {
-          ensureProxyState(get, setCb)
           target[property] = value
           return true
         }
@@ -135,7 +114,7 @@ export function mutableAtom<Value>(
       get(valueAtom) // subscribe to value updates
       const setCb = makeSetCb(setSelf)
       const proxyState = ensureProxyState(get, setCb)
-      return wrapProxyState(proxyState, get, setCb)
+      return wrapProxyState(proxyState)
     },
     (get, set, writeFn: WriteFn) => writeFn(get, set)
   )
@@ -162,7 +141,7 @@ const makeSetCb =
 
 /**
  * delays execution until next microtask
- * */
+ */
 function defer(fn?: () => PromiseOrValue<void>) {
   return Promise.resolve().then(fn)
 }
