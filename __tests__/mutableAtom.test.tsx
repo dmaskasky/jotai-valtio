@@ -361,6 +361,32 @@ it('should correctly handle updates via writable atom', async () => {
   })
 })
 
+it('should perform synchronous update', async () => {
+  expect.assertions(2)
+  const mutableCountAtom = mutableAtom(0)
+  const countIsNotZeroAtom = atom((get) => get(mutableCountAtom).value > 0)
+  const incrementCountAtom = atom(null, (get) => {
+    const countProxy = get(mutableCountAtom)
+    expect(get(countIsNotZeroAtom)).toBe(false)
+    countProxy.value++
+    expect(get(countIsNotZeroAtom)).toBe(true)
+  })
+  let isMounted = false
+  incrementCountAtom.onMount = () => {
+    isMounted = true
+  }
+  function useTest() {
+    useAtom(countIsNotZeroAtom)
+    const [, incrementCount] = useAtom(incrementCountAtom)
+    return { incrementCount }
+  }
+  const { result } = renderHook(useTest)
+  await waitFor(() => assert(isMounted))
+  await act(async () => {
+    result.current.incrementCount()
+  })
+})
+
 // TODO: fix this infinite loop
 it.skip('should not infinite loop when updating the proxy value in the read function', async () => {
   expect.assertions(2)
