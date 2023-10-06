@@ -1,3 +1,5 @@
+type Wrapped<T> = { value: T }
+
 type ProxyFn<T> = (obj: Wrapped<T>) => Wrapped<T>
 
 export type Store<Value> = {
