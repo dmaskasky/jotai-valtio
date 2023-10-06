@@ -1,5 +1,5 @@
-import { atom } from 'jotai'
-import { proxy, snapshot, subscribe } from 'valtio'
+import { atom } from 'jotai/vanilla'
+import { proxy, snapshot, subscribe } from 'valtio/vanilla'
 import type {
   Action,
   ActionWithPayload,
