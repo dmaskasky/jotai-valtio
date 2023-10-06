@@ -74,7 +74,7 @@ export function makeMutableAtom<Value>(
    */
   function createProxyState(initialValue: Value, getStore: () => Store<Value>) {
     const proxyState = proxyFn({ value: initialValue })
-    proxyState.value = initialValue
+    // We never unsubscribe, but it's garbage collectable.
     subscribe(proxyState, onChange(getStore), true)
     return proxyState
   }
