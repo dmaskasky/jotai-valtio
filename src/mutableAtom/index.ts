@@ -75,7 +75,7 @@ export function mutableAtom<Value>(
    */
   function wrapProxyState(proxyState: ProxyState<Value>) {
     return new Proxy(proxyState, {
-      get: (target, property) => {
+      get(target, property) {
         return target[property as keyof ProxyState<Value>]
       },
       set(target, property, value) {
