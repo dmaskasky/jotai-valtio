@@ -1,5 +1,4 @@
 import { atom } from 'jotai'
-import type { PrimitiveAtom } from 'jotai'
 import { proxy, snapshot, subscribe } from 'valtio'
 import type {
   Action,
@@ -7,25 +6,18 @@ import type {
   Options,
   ProxyState,
   Store,
-  Wrapped,
 } from './types'
 
 export function mutableAtom<Value>(
-  value: Value,
+  initialValue: Value,
   options: Options<Value> = defaultOptions
 ) {
-  const valueAtom = atom({ value })
+  const valueAtom = atom({ value: initialValue })
 
   if (process.env.NODE_ENV !== 'production') {
     valueAtom.debugPrivate = true
   }
-  return makeMutableAtom(valueAtom, options)
-}
 
-export function makeMutableAtom<Value>(
-  valueAtom: PrimitiveAtom<Wrapped<Value>>,
-  options: Options<Value> = defaultOptions
-) {
   const { proxyFn } = { ...defaultOptions, ...options }
 
   const storeAtom = atom<
@@ -34,10 +26,9 @@ export function makeMutableAtom<Value>(
     void | Value
   >(
     (_get, { setSelf }) => {
-      const getValue = () => setSelf({ type: 'getValue' }) as Value
       const store: Store<Value> = {
-        proxyState: createProxyState(getValue(), () => store),
-        getValue,
+        proxyState: createProxyState(() => store),
+        getValue: () => setSelf({ type: 'getValue' }) as Value,
         setValue: (value: Value) =>
           setSelf({ type: 'setValue', payload: value }) as void,
       }
@@ -72,7 +63,7 @@ export function makeMutableAtom<Value>(
   /**
    * create the proxy state and subscribe to it
    */
-  function createProxyState(initialValue: Value, getStore: () => Store<Value>) {
+  function createProxyState(getStore: () => Store<Value>) {
     const proxyState = proxyFn({ value: initialValue })
     // We never unsubscribe, but it's garbage collectable.
     subscribe(proxyState, onChange(getStore), true)
