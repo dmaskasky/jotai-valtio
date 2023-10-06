@@ -1,12 +1,13 @@
 import { atom } from 'jotai/vanilla'
 import { proxy, snapshot, subscribe } from 'valtio/vanilla'
-import type {
-  Action,
-  ActionWithPayload,
-  Options,
-  ProxyState,
-  Store,
-} from './types'
+
+type Wrapped<T> = { value: T }
+
+type ProxyFn<T> = (obj: Wrapped<T>) => Wrapped<T>
+
+type Options<T> = {
+  proxyFn?: ProxyFn<T>
+}
 
 export function mutableAtom<Value>(
   initialValue: Value,
@@ -101,4 +102,20 @@ export function mutableAtom<Value>(
 
 const defaultOptions = {
   proxyFn: proxy,
+}
+
+type Store<Value> = {
+  proxyState: ProxyState<Value>
+  getValue: () => Value
+  setValue: (value: Value) => void
+}
+
+export type ProxyState<Value> = { value: Value }
+
+type Action<Type extends string> = {
+  type: Type
+}
+
+type ActionWithPayload<Type extends string, Payload> = Action<Type> & {
+  payload: Payload
 }

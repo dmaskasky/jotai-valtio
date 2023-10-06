@@ -3,7 +3,7 @@ import { act, render, renderHook, waitFor } from '@testing-library/react'
 import { atom, getDefaultStore, useAtom, useAtomValue, useSetAtom } from 'jotai'
 import assert from 'minimalistic-assert'
 import { mutableAtom } from '../src/mutableAtom'
-import type { ProxyState } from '../src/mutableAtom/types'
+import type { ProxyState } from '../src/mutableAtom'
 
 it('should be defined on initial render', async () => {
   expect.assertions(1)
