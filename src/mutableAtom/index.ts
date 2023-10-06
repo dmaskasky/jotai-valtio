@@ -1,59 +1,47 @@
-import { atom } from 'jotai'
-import type { PrimitiveAtom } from 'jotai'
-import { proxy, snapshot, subscribe } from 'valtio'
+import { atom } from 'jotai/vanilla'
+import { proxy, snapshot, subscribe } from 'valtio/vanilla'
 import type {
   Action,
   ActionWithPayload,
   Options,
   ProxyState,
   Store,
-  Wrapped,
 } from './types'
 
 export function mutableAtom<Value>(
-  value: Value,
+  initialValue: Value,
   options: Options<Value> = defaultOptions
 ) {
-  const valueAtom = atom({ value })
+  const valueAtom = atom({ value: initialValue })
 
   if (process.env.NODE_ENV !== 'production') {
     valueAtom.debugPrivate = true
   }
-  return makeMutableAtom(valueAtom, options)
-}
 
-export function makeMutableAtom<Value>(
-  valueAtom: PrimitiveAtom<Wrapped<Value>>,
-  options: Options<Value> = defaultOptions
-) {
   const { proxyFn } = { ...defaultOptions, ...options }
 
   const storeAtom = atom<
     Store<Value>,
-    [ActionWithPayload<'setValueAsync', Value> | Action<'mount'>],
-    void
+    [ActionWithPayload<'setValue', Value> | Action<'getValue'>],
+    void | Value
   >(
-    (get, { setSelf }) => ({
-      proxyState: null,
-      getValue: () => get(valueAtom).value,
-      setValue: async (value: Value) => {
-        await defer()
-        setSelf({ type: 'setValueAsync', payload: value })
-      },
-    }),
+    (_get, { setSelf }) => {
+      const store: Store<Value> = {
+        proxyState: createProxyState(() => store),
+        getValue: () => setSelf({ type: 'getValue' }) as Value,
+        setValue: (value: Value) =>
+          setSelf({ type: 'setValue', payload: value }) as void,
+      }
+      return store
+    },
     (get, set, action) => {
-      if (action.type === 'setValueAsync') {
+      if (action.type === 'setValue') {
         set(valueAtom, { value: action.payload })
-      } else if (action.type === 'mount') {
-        const store = get(storeAtom)
-        store.setValue = (value: Value) => {
-          set(valueAtom, { value })
-        }
+      } else if (action.type === 'getValue') {
+        return get(valueAtom).value
       }
     }
   )
-
-  storeAtom.onMount = (setAtom) => setAtom({ type: 'mount' })
 
   if (process.env.NODE_ENV !== 'production') {
     storeAtom.debugPrivate = true
@@ -65,9 +53,8 @@ export function makeMutableAtom<Value>(
   function onChange(getStore: () => Store<Value>) {
     return () => {
       const { proxyState, getValue, setValue } = getStore()
-      if (proxyState === null) return
       const { value } = snapshot(proxyState)
-      if (value !== getValue()) {
+      if (!Object.is(value, getValue())) {
         setValue(value as Awaited<Value>)
       }
     }
@@ -77,22 +64,9 @@ export function makeMutableAtom<Value>(
    * create the proxy state and subscribe to it
    */
   function createProxyState(getStore: () => Store<Value>) {
-    const store = getStore()
-    const value = store.getValue()
-    store.proxyState ??= proxyFn({ value })
-    store.proxyState.value = value
-    subscribe(store.proxyState, onChange(getStore), true)
-    return store.proxyState
-  }
-
-  /**
-   * return the proxy if it exists, otherwise create and subscribe to it
-   */
-  function ensureProxyState(getStore: () => Store<Value>) {
-    const { proxyState } = getStore()
-    if (proxyState === null) {
-      return createProxyState(getStore)
-    }
+    const proxyState = proxyFn({ value: initialValue })
+    // We never unsubscribe, but it's garbage collectable.
+    subscribe(proxyState, onChange(getStore), true)
     return proxyState
   }
 
@@ -119,20 +93,12 @@ export function makeMutableAtom<Value>(
    */
   const proxyEffectAtom = atom<ProxyState<Value>>((get) => {
     get(valueAtom) // subscribe to value updates
-    const getStore = () => get(storeAtom)
-    const proxyState = ensureProxyState(getStore)
-    return wrapProxyState(proxyState)
+    const store = get(storeAtom)
+    return wrapProxyState(store.proxyState)
   })
   return proxyEffectAtom
 }
 
 const defaultOptions = {
   proxyFn: proxy,
-}
-
-/**
- * delays execution until next microtask
- */
-function defer() {
-  return Promise.resolve().then()
 }
