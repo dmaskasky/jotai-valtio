@@ -2,12 +2,10 @@ export type Wrapped<T> = { value: T }
 
 type ProxyFn<T> = (obj: Wrapped<T>) => Wrapped<T>
 
-type PromiseOrValue<T> = Promise<T> | T
-
 export type Store<Value> = {
-  proxyState: ProxyState<Value> | null
+  proxyState: ProxyState<Value>
   getValue: () => Value
-  setValue: (value: Value) => PromiseOrValue<void>
+  setValue: (value: Value) => void
 }
 
 export type Options<T> = {
